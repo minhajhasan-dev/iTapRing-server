@@ -6,11 +6,7 @@
 import Stripe from "stripe";
 import { sendOrderConfirmationEmail } from "../services/email.service.js";
 import { getOrderBySessionId, saveOrder } from "../services/order.service.js";
-import {
-  invalidateCache,
-  updatePriceCache,
-  validateCart,
-} from "../services/product.service.js";
+import { validateCart } from "../services/product.service.js";
 import { generateOrderId } from "../utils/helpers.js";
 
 let stripe;
@@ -200,7 +196,7 @@ export const verifyCheckoutSession = async (req, res, next) => {
       });
     }
 
-    const orderId = generateOrderId();
+    const orderId = await generateOrderId();
 
     const orderData = {
       orderId,
@@ -330,10 +326,8 @@ export const handleWebhook = async (req, res) => {
             event.type === "product.created" ? "created" : "updated"
           }: ${product.name} (${product.id})`
         );
-
-        await updatePriceCache();
-        invalidateCache();
-        console.log("✅ Cache updated");
+        // Note: Prices will be fetched fresh on next request
+        console.log("✅ Product event received");
         break;
       }
 
@@ -347,10 +341,8 @@ export const handleWebhook = async (req, res) => {
             2
           )} ${price.currency.toUpperCase()} (${price.id})`
         );
-
-        await updatePriceCache();
-        invalidateCache();
-        console.log("✅ Cache updated");
+        // Note: Prices will be fetched fresh on next request
+        console.log("✅ Price event received");
         break;
       }
 
@@ -380,7 +372,7 @@ async function fulfillOrder(session) {
       }
     );
 
-    const orderId = generateOrderId();
+    const orderId = await generateOrderId();
 
     const orderData = {
       orderId,

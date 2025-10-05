@@ -1,75 +1,56 @@
 /**
- * Rate Limiting Middleware
- * Prevents abuse and DDoS attacks
+ * ==========================================
+ * RATE LIMITER - SIMPLIFIED VERSION
+ * ==========================================
+ * 
+ * PURPOSE:
+ * Prevent people from spamming our API
+ * 
+ * WHAT IS RATE LIMITING:
+ * - If someone makes too many requests, block them temporarily
+ * - Prevents DDoS attacks (hackers flooding the server)
+ * - Prevents bots from abusing the API
+ * 
+ * HOW IT WORKS:
+ * - Track how many requests each IP address makes
+ * - If they make too many in 15 minutes, block them
+ * - After 15 minutes, they can try again
+ * 
+ * FOR JUNIOR DEVELOPERS:
+ * - This protects our server from getting overwhelmed
+ * - Without this, someone could crash our server
+ * - Think of it like "max 3 attempts" on a password
  */
 
 import rateLimit from "express-rate-limit";
 
 /**
- * General API rate limiter
- * 100 requests per 15 minutes per IP
+ * Simple rate limiter for all API endpoints
+ * 
+ * LIMITS:
+ * - 100 requests per 15 minutes per IP address
+ * - That's about 6-7 requests per minute
+ * 
+ * WHEN IT BLOCKS:
+ * - Returns error message: "Too many requests, please try again later"
+ * - Status code: 429 (Too Many Requests)
  */
 export const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, // 15 minutes (in milliseconds)
+  max: 100, // Max 100 requests per window
+  
+  // Error message when limit exceeded
   message: {
     success: false,
     message: "Too many requests from this IP, please try again later.",
   },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  
+  // Send rate limit info in response headers
+  standardHeaders: true, // Include RateLimit-* headers
+  legacyHeaders: false, // Don't use old X-RateLimit-* headers
+  
+  // Skip rate limiting for health check endpoint
   skip: (req) => {
-    // Skip rate limiting for health check
     return req.path === "/health";
-  },
-});
-
-/**
- * Strict rate limiter for payment endpoints
- * 20 requests per 15 minutes per IP
- */
-export const paymentRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Limit each IP to 20 requests per windowMs
-  message: {
-    success: false,
-    message: "Too many payment requests, please try again later.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-/**
- * Webhook rate limiter
- * More generous for Stripe webhooks
- */
-export const webhookRateLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // Limit to 100 webhook calls per minute
-  message: {
-    success: false,
-    message: "Webhook rate limit exceeded.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-/**
- * Product read rate limiter
- * Very generous for price polling and product browsing
- * Frontend polls every 30 seconds = 120 requests/hour = safe
- */
-export const productRateLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 200, // Limit to 200 requests per minute (generous for polling + user browsing)
-  message: {
-    success: false,
-    message: "Too many product requests, please slow down.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limiting for product refresh endpoint (it's manual)
-    return req.path.includes("/refresh");
   },
 });

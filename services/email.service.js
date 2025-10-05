@@ -1,7 +1,24 @@
 /**
- * Email Service
- * Professional email handling for order confirmations using Hostinger SMTP
- * Sends emails to both customers and business owner
+ * ==========================================
+ * EMAIL SERVICE - SIMPLIFIED VERSION
+ * ==========================================
+ * 
+ * PURPOSE:
+ * Send order confirmation emails to customers and owner
+ * 
+ * WHAT IS SMTP:
+ * - Simple Mail Transfer Protocol (how email works)
+ * - Like the post office for emails
+ * - We use Hostinger as our email provider
+ * 
+ * WHEN EMAILS ARE SENT:
+ * - When customer completes order → send confirmation
+ * - Also notify business owner about new order
+ * 
+ * FOR JUNIOR DEVELOPERS:
+ * - Nodemailer is the library that sends emails
+ * - SMTP settings are in .env file (keep them secret!)
+ * - Email failures should NOT break the order process
  */
 
 import { createTransport } from "nodemailer";
@@ -12,7 +29,10 @@ import {
   generatePlainTextConfirmation,
 } from "../templates/email/plain-text.js";
 
-// Email configuration validation
+/**
+ * Check if email is configured
+ * We need these environment variables to send emails
+ */
 const isEmailConfigured = () => {
   return !!(
     process.env.SMTP_HOST &&
@@ -23,11 +43,12 @@ const isEmailConfigured = () => {
 };
 
 /**
- * Create reusable transporter for Hostinger SMTP
- * Hostinger SMTP Settings:
+ * Create email transporter (connection to email server)
+ * 
+ * HOSTINGER SMTP SETTINGS:
  * - Host: smtp.hostinger.com
- * - Port: 465 (SSL) or 587 (TLS)
- * - Secure: true for port 465, false for port 587
+ * - Port: 465 (with SSL) or 587 (with TLS)
+ * - SSL = more secure connection
  */
 const createTransporter = () => {
   if (!isEmailConfigured()) {
@@ -35,43 +56,49 @@ const createTransporter = () => {
   }
 
   const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const secure = port === 465; // Use SSL for port 465, TLS for 587
+  const secure = port === 465; // Use SSL for port 465
 
   return createTransport({
-    host: process.env.SMTP_HOST,
-    port: port,
-    secure: secure,
+    host: process.env.SMTP_HOST, // Email server address
+    port: port, // Port number
+    secure: secure, // Use SSL encryption?
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: true,
-      minVersion: "TLSv1.2",
+      user: process.env.SMTP_USER, // Email account username
+      pass: process.env.SMTP_PASS, // Email account password
     },
   });
 };
 
 /**
  * Send order confirmation email to customer
- * @param {Object} orderData - Complete order data
- * @returns {Promise<void>}
+ * 
+ * WHAT IT DOES:
+ * 1. Generate HTML email from template
+ * 2. Send email to customer
+ * 3. Also send notification to business owner
+ * 
+ * IMPORTANT:
+ * - If email fails, we log it but DON'T break the order
+ * - Order is more important than email!
  */
 export const sendOrderConfirmationEmail = async (orderData) => {
   console.log("📧 Sending order confirmation emails...");
 
   try {
-    // Check email configuration
+    // Check if email is set up
     if (!isEmailConfigured()) {
       console.log("⚠️  Email service not configured");
       return;
     }
 
+    // Create email connection
     const transporter = createTransporter();
 
-    // Verify connection
+    // Test connection
     await transporter.verify();
+    console.log("✅ Email server connection OK");
 
+    // Generate email HTML
     const customerHtml = generateCustomerConfirmationHTML(orderData);
     const fromName = process.env.BUSINESS_NAME || "iTapRing";
 
@@ -81,22 +108,14 @@ export const sendOrderConfirmationEmail = async (orderData) => {
       to: orderData.customerEmail,
       subject: `Order Confirmation - ${orderData.orderId}`,
       html: customerHtml,
-      text: generatePlainTextConfirmation(orderData),
-      priority: "high",
-      headers: {
-        "X-Priority": "1",
-        "X-MSMail-Priority": "High",
-        Importance: "high",
-        "X-Order-ID": orderData.orderId,
-        "X-Customer-Email": orderData.customerEmail,
-        "X-Mailer": "iTapRing Order System",
-      },
+      text: generatePlainTextConfirmation(orderData), // Plain text version
     });
 
     console.log("✅ Customer email sent:", orderData.customerEmail);
 
-    // Send notification to owner
+    // Also notify the business owner
     await sendOwnerNotification(orderData, transporter);
+
   } catch (error) {
     console.error("❌ Email send failed:", error.message);
     // Don't throw - email failure shouldn't break order processing
@@ -104,10 +123,8 @@ export const sendOrderConfirmationEmail = async (orderData) => {
 };
 
 /**
- * Send order notification to business owner
- * @param {Object} orderData - Complete order data
- * @param {Object} transporter - Nodemailer transporter (reuse connection)
- * @returns {Promise<void>}
+ * Send notification to business owner
+ * This alerts the owner about a new order
  */
 const sendOwnerNotification = async (orderData, transporter) => {
   try {
@@ -124,20 +141,9 @@ const sendOwnerNotification = async (orderData, transporter) => {
     await transporter.sendMail({
       from: `"${fromName} Orders" <${process.env.SMTP_USER}>`,
       to: ownerEmail,
-      subject: `New Order ${orderData.orderId} - $${orderData.amount.toFixed(
-        2
-      )}`,
+      subject: `New Order ${orderData.orderId} - $${orderData.amount.toFixed(2)}`,
       html: ownerHtml,
       text: generateOwnerPlainText(orderData),
-      priority: "high",
-      headers: {
-        "X-Priority": "1",
-        "X-MSMail-Priority": "High",
-        Importance: "high",
-        "X-Order-ID": orderData.orderId,
-        "X-Order-Amount": orderData.amount.toString(),
-        "X-Mailer": "iTapRing Order System",
-      },
     });
 
     console.log("✅ Owner email sent:", ownerEmail);
@@ -148,101 +154,12 @@ const sendOwnerNotification = async (orderData, transporter) => {
 };
 
 /**
- * Send shipping notification to customer
- * @param {Object} orderData - Order data with tracking info
- * @returns {Promise<void>}
- */
-export const sendShippingNotification = async (orderData) => {
-  try {
-    if (!isEmailConfigured()) {
-      console.log(
-        "⚠️  Email service not configured. Skipping shipping notification."
-      );
-      return;
-    }
-
-    const transporter = createTransporter();
-    const fromName = process.env.BUSINESS_NAME || "iTapRing";
-
-    const shippingHtml = `
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Order Shipped - ${orderData.orderId}</title>
-        </head>
-        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f3f4f6;">
-          <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
-              <div style="font-size: 64px; margin-bottom: 15px;">📦</div>
-              <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700;">
-                Your Order Has Shipped!
-              </h1>
-            </div>
-            
-            <div style="padding: 40px 30px;">
-              <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Great news! Your order <strong>${
-                  orderData.orderId
-                }</strong> is on its way.
-              </p>
-              
-              ${
-                orderData.trackingNumber
-                  ? `
-              <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 25px 0;">
-                <h3 style="color: #065f46; margin: 0 0 10px; font-size: 16px;">
-                  Tracking Number
-                </h3>
-                <div style="font-family: 'Courier New', monospace; font-size: 18px; color: #047857; font-weight: 700;">
-                  ${orderData.trackingNumber}
-                </div>
-                ${
-                  orderData.trackingUrl
-                    ? `
-                <div style="margin-top: 15px;">
-                  <a href="${orderData.trackingUrl}" style="color: #10b981; text-decoration: none; font-weight: 600;">
-                    Track Your Package →
-                  </a>
-                </div>
-                `
-                    : ""
-                }
-              </div>
-              `
-                  : ""
-              }
-              
-              <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-                Expected delivery: ${
-                  orderData.estimatedDelivery || "5-7 business days"
-                }
-              </p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    await transporter.sendMail({
-      from: `"${fromName}" <${process.env.SMTP_USER}>`,
-      to: orderData.customerEmail,
-      subject: `Order Shipped - ${orderData.orderId}`,
-      html: shippingHtml,
-      priority: "normal",
-    });
-
-    console.log("✅ Shipping notification sent to:", orderData.customerEmail);
-  } catch (error) {
-    console.error("❌ Failed to send shipping notification:", error.message);
-  }
-};
-
-/**
  * Test email configuration
- * Useful for debugging SMTP settings
- * @returns {Promise<boolean>}
+ * Useful for debugging if emails aren't working
+ * 
+ * WHEN TO USE:
+ * - Run this when setting up the server
+ * - Helps find SMTP configuration problems
  */
 export const testEmailConfiguration = async () => {
   try {
@@ -257,31 +174,17 @@ export const testEmailConfiguration = async () => {
       return false;
     }
 
+    // Try to connect to email server
     const transporter = createTransporter();
-
-    // Verify connection
     await transporter.verify();
 
     console.log("✅ Email configuration is valid");
     console.log("📧 SMTP Host:", process.env.SMTP_HOST);
-    console.log("📧 SMTP Port:", process.env.SMTP_PORT);
     console.log("📧 SMTP User:", process.env.SMTP_USER);
-    console.log("📧 Owner Email:", process.env.OWNER_EMAIL);
 
     return true;
   } catch (error) {
-    console.error("❌ Email configuration test failed:", error.message);
-
-    if (error.code === "EAUTH") {
-      console.error(
-        "🔐 Authentication failed. Check your SMTP_USER and SMTP_PASS."
-      );
-    } else if (error.code === "ECONNECTION" || error.code === "ETIMEDOUT") {
-      console.error(
-        "🌐 Connection failed. Check SMTP_HOST, SMTP_PORT, and firewall settings."
-      );
-    }
-
+    console.error("❌ Email test failed:", error.message);
     return false;
   }
 };
